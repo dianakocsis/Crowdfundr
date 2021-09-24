@@ -157,12 +157,15 @@ contract Project {
     /// @notice Returns number of owned tokens in address's account
     /// @param _addr The address that function is finding balance of
     function balanceOf(address _addr) external view returns (uint) {
+        require(_addr != address(0), "Cannot retrieve balance of 0 address");
         return ownedTokensCount[_addr];
     }
 
     /// @notice Returns the owener of the token id
     /// @param tokenId The token Id that function is finding owner of
     function ownerOf(uint tokenId) public view returns (address) {
+        address owner = awards[tokenId];
+        require(owner != address(0), "Token is nonexistent");
         return awards[tokenId];
     }
 
