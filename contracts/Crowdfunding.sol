@@ -35,7 +35,6 @@ contract Project {
     }
 
     Status public status;
-    bool internal locked;
     address payable public creator; 
     string public title;
     uint public goal;               
@@ -61,13 +60,6 @@ contract Project {
             status = Status.Failed;
         }
         _;
-    }
-    
-    modifier noReentrant() {
-        require(!locked, "No re-entrancy");
-        locked = true;
-        _;
-        locked = false;
     }
     
     /// @notice Sets creator, goal, and deadline (30 days) for project
@@ -109,11 +101,12 @@ contract Project {
     } 
 
     /// @notice Contributors can get a refund only if the project failed or creator cancelled
-    function refund() external noReentrant checkFailed atStatus(Status.Failed) {
+    function refund() external checkFailed atStatus(Status.Failed) {
         require(contributions[msg.sender] > 0, "did not contribute");
-        (bool sent, ) = msg.sender.call{value: contributions[msg.sender]}("");
-        require(sent, "Failed to send refund");
+        uint back = contributions[msg.sender];
         contributions[msg.sender] = 0;
+        (bool sent, ) = msg.sender.call{value: back}("");
+        require(sent, "Failed to send refund");
     } 
 
     /// @notice Creators can withdraw a percentage of the funds only if project reached goal before deadline
@@ -157,7 +150,6 @@ contract Project {
     /// @notice Returns number of owned tokens in address's account
     /// @param _addr The address that function is finding balance of
     function balanceOf(address _addr) external view returns (uint) {
-        require(_addr != address(0), "Cannot retrieve balance of 0 address");
         return ownedTokensCount[_addr];
     }
 
