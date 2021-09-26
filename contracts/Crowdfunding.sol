@@ -56,7 +56,7 @@ contract Project {
     }
 
     modifier checkFailed() {
-        if ((block.timestamp >= deadline) && ((address(this).balance < goal))) {
+        if ((status != Status.Failed) && (block.timestamp >= deadline) && (address(this).balance < goal)) {
             status = Status.Failed;
         }
         _;
