@@ -1,36 +1,34 @@
 const { expect } = require('chai');
-const abi = require('../artifacts/contracts/Project.sol/Project.json').abi;
 
 describe('Crowdfunding Contract', function () {
-  let Crowdfunding;
-  let crowdfunding;
-  let projectAddress;
+  let Project;
   let project;
   let owner;
   let addr1;
   let addr2;
   let addrs;
 
+  const tokens = (count) => ethers.parseUnits(count, 18);
+
   beforeEach(async function () {
-    Crowdfunding = await ethers.getContractFactory('Crowdfunding');
     [owner, addr1, addr2, ...addrs] = await ethers.getSigners();
 
-    crowdfunding = await Crowdfunding.deploy();
-
-    await crowdfunding.connect(owner).registerProject('Test', 10);
-    [projectAddress] = await crowdfunding
-      .connect(owner)
-      .getRegisteredProjects(); // get access to project address that was created
-    project = new ethers.Contract(projectAddress, abi, owner); // accessing contract that exists at this address
+    Project = await ethers.getContractFactory('Project');
+    project = await Project.deploy(
+      owner.address,
+      tokens('3'),
+      'Test Project',
+      'TST'
+    );
   });
 
   describe('Deployment', function () {
-    it('Marks correct creator', async function () {
-      expect(await project.creator()).to.equal(owner.address);
+    it('Marks correct owner', async function () {
+      expect(await project.owner()).to.equal(owner.address);
     });
 
-    it('Marks correct title', async function () {
-      expect(await project.title()).to.equal('Test');
+    it('Marks correct name', async function () {
+      expect(await project.name()).to.equal('Test Project');
     });
   });
 
@@ -77,13 +75,13 @@ describe('Crowdfunding Contract', function () {
   });
 
   describe('Withdrawing', function () {
-    it('Only creator can withdraw', async function () {
-      await expect(project.connect(addr1).withdraw(50)).to.be.revertedWith(
-        'Not creator'
-      );
+    it('Only owner can withdraw', async function () {
+      await expect(project.connect(addr1).withdraw(50))
+        .to.be.revertedWithCustomError(project, 'OnlyOwner')
+        .withArgs(owner);
     });
 
-    it("Creator can't withdraw if past the due date and did not reach goal", async function () {
+    it("Owner can't withdraw if past the due date and did not reach goal", async function () {
       const thirtyOneDays = 31 * 24 * 60 * 60;
 
       await ethers.provider.send('evm_increaseTime', [thirtyOneDays]);
@@ -176,10 +174,10 @@ describe('Crowdfunding Contract', function () {
   });
 
   describe('Cancelling', function () {
-    it('Can only be cancelled by creator', async function () {
-      await expect(project.connect(addr1).cancel()).to.be.revertedWith(
-        'Not creator'
-      );
+    it('Can only be cancelled by Owner', async function () {
+      await expect(project.connect(addr1).cancel())
+        .to.be.revertedWithCustomError(project, 'OnlyOwner')
+        .withArgs(owner);
     });
 
     it("Can't be cancelled if fully funded", async function () {
