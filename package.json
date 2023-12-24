@@ -13,7 +13,8 @@
     "@nomicfoundation/hardhat-toolbox": "^4.0.0",
     "@types/seedrandom": "^3.0.8",
     "hardhat": "^2.19.1",
-    "nodemon": "^3.0.1"
+    "nodemon": "^3.0.1",
+    "typescript": "^5.3.3"
   },
   "dependencies": {
     "@openzeppelin/contracts": "^5.0.0",
