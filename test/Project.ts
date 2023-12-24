@@ -95,6 +95,81 @@ describe('Project', function () {
     });
   });
 
+  describe('Claiming', function () {
+    it('Able to claim', async function () {
+      await project.connect(addr1).contribute({ value: tokens('0.01') });
+      await expect(
+        project.connect(addr1).claim(addr2.address)
+      ).to.be.revertedWithCustomError(project, 'CannotClaim');
+      expect(await project.balanceOf(addr2.address)).to.equal(0);
+      expect(await project.balanceOf(addr1.address)).to.equal(0);
+      await project.connect(addr1).contribute({ value: tokens('0.99') });
+      await project.connect(addr1).claim(addr2.address);
+      expect(await project.balanceOf(addr2.address)).to.equal(1);
+      expect(await project.balanceOf(addr1.address)).to.equal(0);
+      expect(await project.contributions(addr1.address)).to.equal(tokens('1'));
+      expect(await project.contributions(addr2.address)).to.equal(tokens('0'));
+    });
+
+    it('Can claim multiple times', async function () {
+      await project.connect(addr1).contribute({ value: tokens('1') });
+      await project.connect(addr1).claim(addr1.address);
+      expect(await project.balanceOf(addr1.address)).to.equal(1);
+      await project.connect(addr1).contribute({ value: tokens('0.5') });
+      await expect(
+        project.connect(addr1).claim(addr1.address)
+      ).to.be.revertedWithCustomError(project, 'CannotClaim');
+      expect(await project.balanceOf(addr1.address)).to.equal(1);
+      await project.connect(addr1).contribute({ value: tokens('0.5') });
+      await project.connect(addr1).claim(addr1.address);
+      expect(await project.balanceOf(addr1.address)).to.equal(2);
+    });
+
+    it('Claimed event emitted', async function () {
+      await project.connect(addr1).contribute({ value: tokens('3') });
+      const txResponse = await project.connect(addr1).claim(addr2.address);
+      const tx = await txResponse.wait();
+      await expect(tx).to.emit(project, 'Claimed').withArgs(addr2.address, 3);
+    });
+
+    it('Fuzzing', async function () {
+      const seed = Math.random().toString();
+      const rng = seedRandom(seed);
+
+      const signers = await ethers.getSigners();
+      for (let i = 0; i < 100_000; i++) {
+        if (
+          (await ethers.provider.getBalance(project)) >= (await project.goal())
+        ) {
+          break;
+        }
+        const randomInt = getRandomInt(signers.length, rng);
+        const randomSigner = signers[randomInt];
+        let randomEthAmount = BigInt(getRandomInt(10, rng)) * tokens('0.5');
+
+        if (randomEthAmount <= tokens('0.1')) {
+          randomEthAmount = randomEthAmount + tokens('0.1');
+        }
+
+        await project
+          .connect(randomSigner)
+          .contribute({ value: randomEthAmount });
+      }
+
+      for (const signer of signers) {
+        const contributeAmount = await project.contributions(signer.address);
+        if (contributeAmount / tokens('1') < 1) {
+          continue;
+        }
+        await project.connect(signer).claim(signer.address);
+        const expectedNumNFTs = contributeAmount / tokens('1');
+        expect(await project.balanceOf(signer.address)).to.equal(
+          expectedNumNFTs
+        );
+      }
+    });
+  });
+
   describe('Withdrawing', function () {
     it('Only owner can withdraw', async function () {
       await expect(project.connect(addr1).withdraw(50))

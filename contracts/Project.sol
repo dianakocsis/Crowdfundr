@@ -5,18 +5,20 @@ import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 contract Project is ERC721 {
 
     uint256 public constant MIN_CONTRIBUTION = 0.01 ether;
-    Status public status;
+    uint256 public constant TIMELINE = 30 days;
     address public immutable owner;
-    uint256 public constant timeline = 30 days;
-    uint public goal;
-    uint public deadline;
+    uint256 public immutable goal;
+    uint256 public immutable deadline;
+    Status public status;
     uint256 public totalFunds;
     uint256 public currentFunds;
+    uint256 public tokenId = 1;
     uint public idCounter;
     uint public minimumContribution = 0.01 ether;
     mapping(address => uint256) public contributions;
     mapping(uint => address) awards;
     mapping(address => uint) ownedTokensCount;
+    mapping(address => uint256) public tokensClaimed;
     bool public canceled;
 
     enum Status {
@@ -30,11 +32,13 @@ contract Project is ERC721 {
     event Cancel(string title, address projectAddress);
     event Contributed(address contributor, uint256 value);
     event Canceled();
+    event Claimed(address claimer, uint256 tokens);
 
     error OnlyOwner(address owner);
     error InvalidContribution(uint256 value);
     error CannotContribute();
     error CannotCancel();
+    error CannotClaim();
 
     modifier atStatus(Status _status) {
         require(status == _status, "Cannot be called at this time.");
@@ -49,7 +53,7 @@ contract Project is ERC721 {
     constructor(address _owner, uint256 _goal, string memory _name, string memory _symbol) ERC721(_name, _symbol) {
         owner = _owner;
         goal = _goal;
-        deadline = block.timestamp + timeline;
+        deadline = block.timestamp + TIMELINE;
     }
 
     /// @notice Modifier to check if the caller is the owner
@@ -69,6 +73,19 @@ contract Project is ERC721 {
         currentFunds += msg.value;
 
         emit Contributed(msg.sender, msg.value);
+    }
+
+    /// @notice Claims tokens for the contributor
+    /// @param _to The address to send the tokens to
+    function claim(address _to) external {
+        uint256 totalTokens =  contributions[msg.sender] / 1 ether;
+        uint256 tokensToClaim = totalTokens - tokensClaimed[msg.sender];
+        if (tokensToClaim == 0) revert CannotClaim();
+        tokensClaimed[msg.sender] += tokensToClaim;
+        emit Claimed(_to, tokensToClaim);
+        for (uint256 i = 0; i < tokensToClaim; i++) {
+            _safeMint(_to, tokenId++);
+        }
     }
 
     /// @notice Contributors can get a refund only if the project failed or creator cancelled
