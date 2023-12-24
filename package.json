@@ -6,23 +6,17 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/dlk61/Crowdfundr.git"
-  },
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "bugs": {
-    "url": "https://github.com/dlk61/Crowdfundr/issues"
-  },
-  "homepage": "https://github.com/dlk61/Crowdfundr#readme",
   "devDependencies": {
-    "@nomiclabs/hardhat-ethers": "^2.0.2",
-    "@nomiclabs/hardhat-waffle": "^2.0.1",
-    "chai": "^4.3.4",
-    "ethereum-waffle": "^3.4.0",
-    "ethers": "^5.4.7",
-    "hardhat": "^2.6.4"
+    "@nomicfoundation/hardhat-toolbox": "^4.0.0",
+    "@types/seedrandom": "^3.0.8",
+    "hardhat": "^2.19.1",
+    "nodemon": "^3.0.1"
+  },
+  "dependencies": {
+    "@openzeppelin/contracts": "^5.0.0",
+    "seedrandom": "^3.0.5"
   }
 }
