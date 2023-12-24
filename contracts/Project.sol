@@ -33,12 +33,15 @@ contract Project is ERC721 {
     event Contributed(address contributor, uint256 value);
     event Canceled();
     event Claimed(address claimer, uint256 tokens);
+    event Withdrawn(address owner, uint256 value);
 
     error OnlyOwner(address owner);
     error InvalidContribution(uint256 value);
     error CannotContribute();
     error CannotCancel();
     error CannotClaim();
+    error CannotWithdraw();
+    error TransferFailed(bytes data);
 
     modifier atStatus(Status _status) {
         require(status == _status, "Cannot be called at this time.");
@@ -97,11 +100,18 @@ contract Project is ERC721 {
         require(sent, "Failed to send refund");
     }
 
-    /// @notice Creators can withdraw a percentage of the funds only if project reached goal before deadline
-    function withdraw(uint percentage) external onlyOwner {
-        uint remove = (address(this).balance / 100) * percentage;
-        (bool sent, ) = owner.call{value:remove}("");
-        require(sent, "Failed to send Ether");
+    /// @notice Withdraws funds from the project
+    /// @param _to The address to send the funds to
+    /// @param _amount The amount to withdraw
+    /// @dev Only the owner can withdraw funds
+    function withdraw(address payable _to, uint256 _amount) external onlyOwner {
+        if (getStatus() != Status.Completed) revert CannotWithdraw();
+        currentFunds -= _amount;
+        emit Withdrawn(_to, _amount);
+        (bool success, bytes memory data) = _to.call{value: _amount}("");
+        if (!success) {
+            revert TransferFailed(data);
+        }
     }
 
     /// @notice Cancels the project

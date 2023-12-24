@@ -132,6 +132,75 @@ describe('Project', function () {
       await expect(tx).to.emit(project, 'Claimed').withArgs(addr2.address, 3);
     });
 
+    describe('Withdrawing', function () {
+      it('Able to withdraw', async function () {
+        expect(await ethers.provider.getBalance(project)).to.equal(0);
+        await project
+          .connect(addr1)
+          .contribute({ value: await project.goal() });
+        let initialBalance = await ethers.provider.getBalance(addr1.address);
+        expect(await ethers.provider.getBalance(project)).to.equal(
+          await project.goal()
+        );
+        await project.withdraw(addr1.address, await project.goal());
+        expect(await ethers.provider.getBalance(addr1.address)).to.equal(
+          initialBalance + (await project.goal())
+        );
+        expect(await ethers.provider.getBalance(project)).to.equal(0);
+      });
+
+      it('Only owner can withdraw', async function () {
+        await project.connect(addr1).contribute({ value: tokens('0.1') });
+        await expect(
+          project.connect(addr1).withdraw(addr1.address, await project.goal())
+        )
+          .to.be.revertedWithCustomError(project, 'OnlyOwner')
+          .withArgs(owner.address);
+      });
+
+      it('Owner cannot withdraw if goal not met', async function () {
+        await project.connect(addr1).contribute({ value: tokens('0.1') });
+        await expect(
+          project.withdraw(owner.address, await project.goal())
+        ).to.be.revertedWithCustomError(project, 'CannotWithdraw');
+      });
+
+      it('Can withdraw in increments', async function () {
+        expect(await ethers.provider.getBalance(project)).to.equal(0);
+        await project
+          .connect(addr1)
+          .contribute({ value: await project.goal() });
+        let initialBalance = await ethers.provider.getBalance(addr1.address);
+        expect(await ethers.provider.getBalance(project)).to.equal(
+          await project.goal()
+        );
+        await project.withdraw(addr1.address, tokens('1'));
+        expect(await ethers.provider.getBalance(addr1.address)).to.equal(
+          initialBalance + tokens('1')
+        );
+        expect(await ethers.provider.getBalance(project)).to.equal(tokens('2'));
+        await project.withdraw(addr1.address, tokens('2'));
+        expect(await ethers.provider.getBalance(addr1.address)).to.equal(
+          initialBalance + (await project.goal())
+        );
+        expect(await ethers.provider.getBalance(project)).to.equal('0');
+      });
+
+      it('Withdrawn event emitted', async function () {
+        await project
+          .connect(addr1)
+          .contribute({ value: await project.goal() });
+        const txResponse = await project.withdraw(
+          addr1.address,
+          await project.goal()
+        );
+        const tx = await txResponse.wait();
+        await expect(tx)
+          .to.emit(project, 'Withdrawn')
+          .withArgs(addr1.address, await project.goal());
+      });
+    });
+
     it('Fuzzing', async function () {
       const seed = Math.random().toString();
       const rng = seedRandom(seed);
@@ -167,35 +236,6 @@ describe('Project', function () {
           expectedNumNFTs
         );
       }
-    });
-  });
-
-  describe('Withdrawing', function () {
-    it('Only owner can withdraw', async function () {
-      await expect(project.connect(addr1).withdraw(50))
-        .to.be.revertedWithCustomError(project, 'OnlyOwner')
-        .withArgs(owner);
-    });
-
-    it("Owner can't withdraw if past the due date and did not reach goal", async function () {
-      const thirtyOneDays = 31 * 24 * 60 * 60;
-
-      await ethers.provider.send('evm_increaseTime', [thirtyOneDays]);
-      await ethers.provider.send('evm_mine');
-
-      await expect(project.connect(owner).withdraw(10)).to.be.revertedWith(
-        'Cannot be called at this time.'
-      );
-    });
-
-    it('Proper amount is withdrawed', async function () {
-      await project.connect(addr1).contribute({
-        value: ethers.parseEther('10'),
-      });
-      await project.connect(owner).withdraw(25);
-      expect(await ethers.provider.getBalance(project.target)).to.be.equal(
-        ethers.parseEther('7.5')
-      );
     });
   });
 
