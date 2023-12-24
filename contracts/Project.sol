@@ -1,40 +1,43 @@
-// SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
+// SPDX-License-Identifier: UNLICENSED
+pragma solidity ^0.8.20;
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 
 contract Project is ERC721 {
 
-    event Success(string title, address projectAddress);
-    event Cancel(string title, address projectAddress);
-
-    enum Status {
-        Funding,
-        Successful,
-        Failed
-    }
-
+    uint256 public constant MIN_CONTRIBUTION = 0.01 ether;
     Status public status;
     address public immutable owner;
     uint256 public constant timeline = 30 days;
     uint public goal;
     uint public deadline;
+    uint256 public totalFunds;
+    uint256 public currentFunds;
     uint public idCounter;
     uint public minimumContribution = 0.01 ether;
-    mapping(address => uint) contributions;
+    mapping(address => uint256) public contributions;
     mapping(uint => address) awards;
     mapping(address => uint) ownedTokensCount;
+    bool public canceled;
+
+    enum Status {
+        Active,
+        Canceled,
+        Expired,
+        Completed
+    }
+
+    event Success(string title, address projectAddress);
+    event Cancel(string title, address projectAddress);
+    event Contributed(address contributor, uint256 value);
+    event Canceled();
 
     error OnlyOwner(address owner);
+    error InvalidContribution(uint256 value);
+    error CannotContribute();
+    error CannotCancel();
 
     modifier atStatus(Status _status) {
         require(status == _status, "Cannot be called at this time.");
-        _;
-    }
-
-    modifier checkFailed() {
-        if ((status != Status.Failed) && (block.timestamp >= deadline) && (address(this).balance < goal)) {
-            status = Status.Failed;
-        }
         _;
     }
 
@@ -57,36 +60,19 @@ contract Project is ERC721 {
         _;
     }
 
-    /// @notice Can only contribute if project is still being Funded.
-    ///           - Bronze tier is granted to anyone contribution.
-    ///           - Silver tier is granted to a total contribution of at least 0.25 ETH.
-    ///           - Gold tier is granted to a total contribution of at least 1 ETH.
-    function contribute() external checkFailed atStatus(Status.Funding) payable {
-        require(msg.value >= minimumContribution, "Need to make a larger contribution");
-
-        if (msg.value >= 1 ether && contributions[msg.sender] < 1 ether ) {
-            _mint(1, msg.sender);
-        }
-        else if (msg.value >= .25 ether && contributions[msg.sender] < .25 ether) {
-            _mint(2, msg.sender);
-
-        }
-        else if (contributions[msg.sender] == 0) {
-            _mint(3, msg.sender);
-        }
-        else{
-        }
-
+    /// @notice Contributes to the project
+    function contribute() external payable {
+        if (getStatus() != Status.Active) revert CannotContribute();
+        if (msg.value < MIN_CONTRIBUTION) revert InvalidContribution(msg.value);
         contributions[msg.sender] += msg.value;
+        totalFunds += msg.value;
+        currentFunds += msg.value;
 
-        if (address(this).balance >= goal) {
-            status = Status.Successful;
-            emit Success(name(), address(this));
-        }
+        emit Contributed(msg.sender, msg.value);
     }
 
     /// @notice Contributors can get a refund only if the project failed or creator cancelled
-    function refund() external checkFailed atStatus(Status.Failed) {
+    function refund() external {
         require(contributions[msg.sender] > 0, "did not contribute");
         uint back = contributions[msg.sender];
         contributions[msg.sender] = 0;
@@ -95,16 +81,18 @@ contract Project is ERC721 {
     }
 
     /// @notice Creators can withdraw a percentage of the funds only if project reached goal before deadline
-    function withdraw(uint percentage) external onlyOwner atStatus(Status.Successful) {
+    function withdraw(uint percentage) external onlyOwner {
         uint remove = (address(this).balance / 100) * percentage;
         (bool sent, ) = owner.call{value:remove}("");
         require(sent, "Failed to send Ether");
     }
 
-    /// @notice Only creators can choose to cancel the project before the 30 days are over
-    function cancel() external onlyOwner atStatus(Status.Funding) {
-        status = Status.Failed;
-        emit Cancel(name(), address(this));
+    /// @notice Cancels the project
+    /// @dev Only the owner can cancel the project
+    function cancel() external onlyOwner {
+        if (getStatus() != Status.Active) revert CannotCancel();
+        canceled = true;
+        emit Canceled();
     }
 
     /// @notice Retrieves the total contribution of the contributor
@@ -130,5 +118,19 @@ contract Project is ERC721 {
     function getTier(uint tokenId) public pure returns (uint8) {
         uint8 lastBits = uint8(tokenId) % 2 ** 2;
         return lastBits;
+    }
+
+    /// @notice Returns the current status of the project
+    /// @return The current status of the project
+    function getStatus() public view returns (Status) {
+        if (canceled) {
+            return Status.Canceled;
+        } else if (totalFunds >= goal) {
+            return Status.Completed;
+        } else if (block.timestamp >= deadline) {
+            return Status.Expired;
+        } else {
+            return Status.Active;
+        }
     }
 }
