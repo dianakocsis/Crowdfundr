@@ -23,11 +23,11 @@ contract Project is ERC721 {
         Completed
     }
 
-    event Contributed(address contributor, uint256 value);
-    event Claimed(address claimer, uint256 tokens);
-    event Withdrawn(address owner, uint256 value);
+    event Contributed(address indexed contributor, uint256 value);
+    event Claimed(address indexed claimer, uint256 tokens);
+    event Withdrawn(address indexed owner, uint256 value);
     event Canceled();
-    event Refunded(address contributor, uint256 value);
+    event Refunded(address indexed contributor, uint256 value);
 
     error OnlyOwner(address owner);
     error CannotContribute();

@@ -4,7 +4,7 @@ import "./Project.sol";
 
 contract ProjectFactory {
 
-    event ProjectCreated();
+    event ProjectCreated(address indexed project);
 
     /// @notice Creates a new Project contract
     /// @param _goal The goal of the project
@@ -13,7 +13,7 @@ contract ProjectFactory {
     /// @return The address of the new Project contract
     function create(uint256 _goal, string calldata _name, string calldata _symbol) external returns (address) {
         Project project = new Project(msg.sender, _goal, _name, _symbol);
-        emit ProjectCreated();
+        emit ProjectCreated(address(project));
         return address(project);
     }
 }
