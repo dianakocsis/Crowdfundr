@@ -2,12 +2,19 @@ import { expect } from 'chai';
 import { ethers } from 'hardhat';
 import { time } from '@nomicfoundation/hardhat-network-helpers';
 import { SignerWithAddress } from '@nomicfoundation/hardhat-ethers/signers';
-import { Project__factory, Project } from '../typechain-types';
+import {
+  Project__factory,
+  Project,
+  ReentrancyAttempt__factory,
+  ReentrancyAttempt,
+} from '../typechain-types';
 import seedRandom from 'seedrandom';
 
 describe('Project', function () {
   let Project: Project__factory;
   let project: Project;
+  let ReentrancyAttempt: ReentrancyAttempt__factory;
+  let reentrancyAttempt: ReentrancyAttempt;
   let owner: SignerWithAddress,
     addr1: SignerWithAddress,
     addr2: SignerWithAddress;
@@ -21,6 +28,9 @@ describe('Project', function () {
   beforeEach(async function () {
     [owner, addr1, addr2] = await ethers.getSigners();
     Project = (await ethers.getContractFactory('Project')) as Project__factory;
+    ReentrancyAttempt = (await ethers.getContractFactory(
+      'ReentrancyAttempt'
+    )) as ReentrancyAttempt__factory;
     project = (await Project.deploy(
       owner.address,
       tokens('3'),
@@ -123,6 +133,18 @@ describe('Project', function () {
       await project.connect(addr1).contribute({ value: tokens('0.5') });
       await project.connect(addr1).claim(addr1.address);
       expect(await project.balanceOf(addr1.address)).to.equal(2);
+    });
+
+    it('Reentrancy Attempt', async function () {
+      reentrancyAttempt = await (
+        await ethers.getContractFactory('ReentrancyAttempt')
+      ).deploy(project);
+      const numNFTsBefore = await project.balanceOf(reentrancyAttempt);
+      expect(numNFTsBefore).to.equal(0);
+
+      await expect(
+        reentrancyAttempt.connect(addr1).attack({ value: tokens('3') })
+      ).to.be.revertedWithCustomError(project, 'CannotClaim');
     });
 
     it('Claimed event emitted', async function () {
