@@ -274,114 +274,62 @@ describe('Project', function () {
   });
 
   describe('Refunding', function () {
-    it("Can't receive refund if did not contribute", async function () {
-      await project.connect(owner).cancel();
-      await expect(project.connect(addr1).refund()).to.be.revertedWith(
-        'did not contribute'
-      );
+    it('Able to refund', async function () {
+      await project.connect(addr1).contribute({ value: tokens('0.1') });
+      expect(await ethers.provider.getBalance(project)).to.equal(tokens('0.1'));
+      let thirtyDays = 30 * 24 * 60 * 60;
+      await time.increase(thirtyDays);
+      await project.connect(addr1).refund(addr1.address);
+      expect(await ethers.provider.getBalance(project)).to.equal(0);
     });
 
-    it('Cannot receive refund if project is still funding', async function () {
-      await project.connect(addr1).contribute({
-        value: ethers.parseEther('5'),
-      });
-
-      await expect(project.connect(addr1).refund()).to.be.revertedWith(
-        'Cannot be called at this time.'
-      );
+    it('Refunding allowed - cancelled', async function () {
+      await project.connect(addr1).contribute({ value: tokens('0.1') });
+      expect(await ethers.provider.getBalance(project)).to.equal(tokens('0.1'));
+      await project.cancel();
+      await project.connect(addr1).refund(addr1.address);
+      expect(await ethers.provider.getBalance(project)).to.equal(0);
     });
 
-    it('Can receive refund if deadline passed and goal not reached', async function () {
-      await project.connect(addr1).contribute({
-        value: ethers.parseEther('5'),
-      });
-
-      expect(await ethers.provider.getBalance(project.target)).to.be.equal(
-        ethers.parseEther('5')
-      );
-      expect(
-        await project.connect(owner).getContribution(addr1.address)
-      ).to.be.equal(ethers.parseEther('5'));
-
-      const thirtyOneDays = 31 * 24 * 60 * 60;
-
-      await ethers.provider.send('evm_increaseTime', [thirtyOneDays]);
-      await ethers.provider.send('evm_mine');
-
-      await project.connect(addr1).refund();
-
-      expect(await ethers.provider.getBalance(project.target)).to.be.equal(
-        ethers.parseEther('0')
-      );
-      expect(
-        await project.connect(owner).getContribution(addr1.address)
-      ).to.be.equal(ethers.parseEther('0'));
+    it('Cannot refund - deadline not passed', async function () {
+      await project.connect(addr1).contribute({ value: tokens('0.1') });
+      expect(await ethers.provider.getBalance(project)).to.equal(tokens('0.1'));
+      await expect(
+        project.connect(addr1).refund(addr1.address)
+      ).to.be.revertedWithCustomError(project, 'CannotRefund');
     });
 
-    it('Can receive refund if project cancelled', async function () {
-      await project.connect(addr1).contribute({
-        value: ethers.parseEther('5'),
-      });
-
-      expect(await ethers.provider.getBalance(project.target)).to.be.equal(
-        ethers.parseEther('5')
-      );
-      expect(
-        await project.connect(owner).getContribution(addr1.address)
-      ).to.be.equal(ethers.parseEther('5'));
-
-      await project.connect(owner).cancel();
-
-      await project.connect(addr1).refund();
-
-      expect(await ethers.provider.getBalance(project.target)).to.be.equal(
-        ethers.parseEther('0')
-      );
-      expect(
-        await project.connect(owner).getContribution(addr1.address)
-      ).to.be.equal(ethers.parseEther('0'));
-    });
-  });
-
-  describe('NFT', function () {
-    it('Tiers', async function () {
-      await project.connect(addr1).contribute({
-        value: ethers.parseEther('1'),
-      });
-
-      await project.connect(addr2).contribute({
-        value: ethers.parseEther('.25'),
-      });
-
-      await project.connect(owner).contribute({
-        value: ethers.parseEther('.1'),
-      });
-
-      expect(await project.connect(owner).getTier(1)).to.be.equal(1);
-
-      expect(await project.connect(owner).getTier(6)).to.be.equal(2);
-
-      expect(await project.connect(owner).getTier(11)).to.be.equal(3);
-
-      expect(await project.connect(owner).ownerOf(6)).to.be.equal(
-        addr2.address
-      );
+    it('Cannot refund - goal met', async function () {
+      await project.connect(addr1).contribute({ value: tokens('3') });
+      expect(await ethers.provider.getBalance(project)).to.equal(tokens('3'));
+      let thirtyDays = 30 * 24 * 60 * 60;
+      await time.increase(thirtyDays);
+      await expect(
+        project.connect(addr1).refund(addr1.address)
+      ).to.be.revertedWithCustomError(project, 'CannotRefund');
     });
 
-    it('Balance of tokens', async function () {
-      await project.connect(addr1).contribute({
-        value: ethers.parseEther('.1'),
-      });
-      await project.connect(addr1).contribute({
-        value: ethers.parseEther('.3'),
-      });
-      await project.connect(addr1).contribute({
-        value: ethers.parseEther('1'),
-      });
+    it('Cannot double refund', async function () {
+      await project.connect(addr1).contribute({ value: tokens('0.1') });
+      expect(await ethers.provider.getBalance(project)).to.equal(tokens('0.1'));
+      let thirtyDays = 30 * 24 * 60 * 60;
+      await time.increase(thirtyDays);
+      await project.connect(addr1).refund(addr1.address);
+      expect(await ethers.provider.getBalance(project)).to.equal(0);
+      await expect(
+        project.connect(addr1).refund(addr1.address)
+      ).to.be.revertedWithCustomError(project, 'CannotRefund');
+    });
 
-      expect(await project.connect(owner).balanceOf(addr1.address)).to.be.equal(
-        3
-      );
+    it('Refunded event emitted', async function () {
+      await project.connect(addr1).contribute({ value: tokens('0.1') });
+      let thirtyDays = 30 * 24 * 60 * 60;
+      await time.increase(thirtyDays);
+      const txResponse = await project.connect(addr1).refund(addr1.address);
+      const tx = await txResponse.wait();
+      await expect(tx)
+        .to.emit(project, 'Refunded')
+        .withArgs(addr1.address, tokens('0.1'));
     });
   });
 });

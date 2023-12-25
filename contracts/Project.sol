@@ -34,6 +34,7 @@ contract Project is ERC721 {
     event Canceled();
     event Claimed(address claimer, uint256 tokens);
     event Withdrawn(address owner, uint256 value);
+    event Refunded(address contributor, uint256 value);
 
     error OnlyOwner(address owner);
     error InvalidContribution(uint256 value);
@@ -42,6 +43,7 @@ contract Project is ERC721 {
     error CannotClaim();
     error CannotWithdraw();
     error TransferFailed(bytes data);
+    error CannotRefund();
 
     modifier atStatus(Status _status) {
         require(status == _status, "Cannot be called at this time.");
@@ -91,15 +93,6 @@ contract Project is ERC721 {
         }
     }
 
-    /// @notice Contributors can get a refund only if the project failed or creator cancelled
-    function refund() external {
-        require(contributions[msg.sender] > 0, "did not contribute");
-        uint back = contributions[msg.sender];
-        contributions[msg.sender] = 0;
-        (bool sent, ) = msg.sender.call{value: back}("");
-        require(sent, "Failed to send refund");
-    }
-
     /// @notice Withdraws funds from the project
     /// @param _to The address to send the funds to
     /// @param _amount The amount to withdraw
@@ -122,29 +115,18 @@ contract Project is ERC721 {
         emit Canceled();
     }
 
-    /// @notice Retrieves the total contribution of the contributor
-    function getContribution(address addr) external view returns (uint) {
-        return contributions[addr];
-    }
-
-    /// @notice Mints id and transfers it to receiver
-    /// @param tier Type of NFT: Gold (1), Silver (2), Bronze (3)
-    /// @param receiver Address that will own the minted token
-    function _mint(uint8 tier, address receiver) internal {
-        require(receiver != address(0));   // Ensure address is not the 0 address
-        uint id = (idCounter << 2) + tier; // Generate a token id
-        idCounter += 1;                    // Increment the counter to ensure new id every time
-        require(awards[id] == address(0), "ID already owned by someone else"); // Check that a token with the same token ID is not already owned by someone else
-        awards[id] = receiver;             // Sets owner of ID to receiver address
-        ownedTokensCount[receiver] += 1;   // Increases count of owned tokens
-        emit Transfer(address(0), receiver, id);
-    }
-
-    /// @notice Retrieves last 2 bits of token ID and returns the tier (1, 2, or 3)
-    /// @param tokenId Token ID that was issued
-    function getTier(uint tokenId) public pure returns (uint8) {
-        uint8 lastBits = uint8(tokenId) % 2 ** 2;
-        return lastBits;
+    /// @notice Refunds the contributor
+    /// @param _to The address to send the refund to
+    function refund(address payable _to) external {
+        if ((getStatus() != Status.Expired && getStatus() != Status.Canceled) ||
+            contributions[msg.sender] == 0) revert CannotRefund();
+        uint256 refundAmount = contributions[msg.sender];
+        contributions[msg.sender] = 0;
+        emit Refunded(_to, refundAmount);
+        (bool success, bytes memory data) = _to.call{value: refundAmount}("");
+        if (!success) {
+            revert TransferFailed(data);
+        }
     }
 
     /// @notice Returns the current status of the project
