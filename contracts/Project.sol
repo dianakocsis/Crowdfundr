@@ -9,15 +9,10 @@ contract Project is ERC721 {
     address public immutable owner;
     uint256 public immutable goal;
     uint256 public immutable deadline;
-    Status public status;
     uint256 public totalFunds;
     uint256 public currentFunds;
     uint256 public tokenId = 1;
-    uint public idCounter;
-    uint public minimumContribution = 0.01 ether;
     mapping(address => uint256) public contributions;
-    mapping(uint => address) awards;
-    mapping(address => uint) ownedTokensCount;
     mapping(address => uint256) public tokensClaimed;
     bool public canceled;
 
@@ -28,27 +23,20 @@ contract Project is ERC721 {
         Completed
     }
 
-    event Success(string title, address projectAddress);
-    event Cancel(string title, address projectAddress);
     event Contributed(address contributor, uint256 value);
-    event Canceled();
     event Claimed(address claimer, uint256 tokens);
     event Withdrawn(address owner, uint256 value);
+    event Canceled();
     event Refunded(address contributor, uint256 value);
 
     error OnlyOwner(address owner);
-    error InvalidContribution(uint256 value);
     error CannotContribute();
-    error CannotCancel();
+    error InvalidContribution(uint256 value);
     error CannotClaim();
     error CannotWithdraw();
-    error TransferFailed(bytes data);
+    error CannotCancel();
     error CannotRefund();
-
-    modifier atStatus(Status _status) {
-        require(status == _status, "Cannot be called at this time.");
-        _;
-    }
+    error TransferFailed(bytes data);
 
     /// @notice Creates a new Project contract
     /// @param _owner The owner of the project
